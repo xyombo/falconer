@@ -1,0 +1,9 @@
+servers:
+  - host: your-ssh-server-ip
+    port: ssh-port
+    user: ssh-user
+    password: ssh-auth-password
+    desc: description of ssh server
+    keys:
+      - first_key_file_path
+      - second_key_file_path

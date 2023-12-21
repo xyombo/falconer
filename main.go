@@ -12,10 +12,12 @@ import (
 )
 
 type ServerConfig struct {
-	Host     string `yaml:"host"`
-	Port     int    `yaml:"port"`
-	Desc     string `yaml:"desc"`
-	Password string `yaml:"password"`
+	Host     string   `yaml:"host"`
+	User     string   `yaml:"user"`
+	Port     int      `yaml:"port"`
+	Desc     string   `yaml:"desc"`
+	Password string   `yaml:"password"`
+	Keys     []string `yaml:"keys"`
 }
 
 type YamlConfig struct {
@@ -81,13 +83,36 @@ func main() {
 
 	//把配置的服务器列表用tview.list展示出来
 	if serverConfig, err := ShowSelectMenu(serverConfigs); err == nil {
+		var authMethods []ssh.AuthMethod
+		if serverConfig.Password == "" {
+			var singers []ssh.Signer
+			for _, key := range serverConfig.Keys {
+				key, err := os.ReadFile(key)
+				if err != nil {
+					log.Fatalf("unable to read private key: %v", err)
+				}
+				signer, err := ssh.ParsePrivateKey(key)
+				if err != nil {
+					log.Fatalf("unable to parse private key: %v", err)
+				}
+				singers = append(singers, signer)
+			}
+			authMethods = append(authMethods, ssh.PublicKeys(singers...))
+			fmt.Println("login in with Private keys", serverConfig.Keys)
+		} else {
+			authMethods = append(authMethods, ssh.Password(serverConfig.Password))
+			fmt.Println("login in with password")
+		}
 		client, err := ssh.Dial("tcp", fmt.Sprintf("%s:%d", serverConfig.Host, serverConfig.Port), &ssh.ClientConfig{
-			User:            "root",
-			Auth:            []ssh.AuthMethod{ssh.Password(serverConfig.Password)},
+			User:            serverConfig.User,
+			Auth:            authMethods,
 			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		})
 
 		session, err := client.NewSession()
+		if err != nil {
+			os.Exit(-1)
+		}
 		defer func(session *ssh.Session) {
 			err := session.Close()
 			if err != nil {
